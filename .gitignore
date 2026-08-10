@@ -1,0 +1,11 @@
+BMAD-METHOD/
+_bmad/
+.claude/
+
+# Secrets / credentials
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+config/config.json
