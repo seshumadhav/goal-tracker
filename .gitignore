@@ -2,6 +2,10 @@ BMAD-METHOD/
 _bmad/
 .claude/
 
+node_modules/
+*.log
+.DS_Store
+
 # Secrets / credentials
 .env
 .env.*

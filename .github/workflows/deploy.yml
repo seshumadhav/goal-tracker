@@ -1,0 +1,28 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            if [ ! -d /home/ec2-user/goal-tracker ]; then
+              git clone https://github.com/seshumadhav/goal-tracker.git /home/ec2-user/goal-tracker
+            fi
+            cd /home/ec2-user/goal-tracker
+            git fetch origin
+            git reset --hard origin/main
+            bash deploy.sh

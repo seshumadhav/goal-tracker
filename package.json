@@ -1,0 +1,15 @@
+{
+  "name": "goat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GOAT (GOAl Tracker) - minimal personal goal tracker backed by Google Sheets.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node --test --test-force-exit tests/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
