@@ -1,5 +1,6 @@
 const express = require('express');
 const auth = require('./lib/auth');
+const sheets = require('./lib/sheets');
 const views = require('./lib/views');
 
 const app = express();
@@ -16,7 +17,7 @@ app.get('/health', (req, res) => {
 
 app.get('/', async (req, res) => {
   const signedIn = await auth.isSignedIn();
-  res.type('html').send(signedIn ? views.signedInPage() : views.signedOutPage());
+  res.type('html').send(signedIn ? views.signedInPage(sheets.loadSheetId()) : views.signedOutPage());
 });
 
 app.get('/auth/google', (req, res) => {
@@ -29,7 +30,8 @@ app.get('/auth/google/callback', async (req, res) => {
     return;
   }
   try {
-    await auth.handleCallback(req);
+    const tokens = await auth.handleCallback(req);
+    await sheets.ensureSheet(tokens.access_token);
   } catch (err) {
     console.error('Google OAuth callback failed:', err.message);
   }
