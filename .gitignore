@@ -13,3 +13,4 @@ node_modules/
 *.key
 credentials.json
 config/config.json
+data/google-token.json
