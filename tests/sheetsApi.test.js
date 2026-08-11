@@ -1,6 +1,12 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { batchGetValues, batchUpdateValues, SheetsApiError } = require('../lib/sheetsApi');
+const {
+  batchGetValues,
+  batchUpdateValues,
+  structuralBatchUpdate,
+  getSpreadsheetMetadata,
+  SheetsApiError,
+} = require('../lib/sheetsApi');
 
 function fakeResponse(status, body) {
   return {
@@ -56,6 +62,35 @@ test('batchUpdateValues issues a single batched POST for all ranges', async () =
   assert.strictEqual(calls[0].options.method, 'POST');
   const body = JSON.parse(calls[0].options.body);
   assert.strictEqual(body.data.length, 2);
+});
+
+test('structuralBatchUpdate posts a requests array to the spreadsheet batchUpdate endpoint', async () => {
+  const calls = [];
+  const fetchFn = async (url, options) => {
+    calls.push({ url, options });
+    return fakeResponse(200, { spreadsheetId: 'sheet-1' });
+  };
+
+  await structuralBatchUpdate('sheet-1', [{ addSheet: { properties: { title: 'Goals' } } }], {
+    fetchFn,
+    getAccessTokenFn: async () => 'token-xyz',
+  });
+
+  assert.strictEqual(calls.length, 1);
+  assert.match(calls[0].url, /\/v4\/spreadsheets\/sheet-1:batchUpdate$/);
+  const body = JSON.parse(calls[0].options.body);
+  assert.strictEqual(body.requests[0].addSheet.properties.title, 'Goals');
+});
+
+test('getSpreadsheetMetadata fetches sheet properties', async () => {
+  const fetchFn = async () => fakeResponse(200, { sheets: [{ properties: { title: 'Sheet1' } }] });
+
+  const result = await getSpreadsheetMetadata('sheet-1', {
+    fetchFn,
+    getAccessTokenFn: async () => 'token-xyz',
+  });
+
+  assert.deepStrictEqual(result, { sheets: [{ properties: { title: 'Sheet1' } }] });
 });
 
 test('retries with exponential backoff on HTTP 429 and succeeds once the API recovers', async () => {
