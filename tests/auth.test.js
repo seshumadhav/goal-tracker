@@ -55,6 +55,23 @@ test('GET /auth/google redirects to Google\'s OAuth consent screen', async () =>
   });
 });
 
+test('GET /auth/google computes an https redirect_uri when Nginx forwards X-Forwarded-Proto', async () => {
+  // Nginx passes the original Host header through unchanged (proxy_set_header
+  // Host $host in nginx/goat.conf), so only the protocol needs `trust proxy`
+  // to be reported correctly — Express's req.protocol otherwise always says
+  // "http" for a plain TCP connection, even when Nginx terminated TLS.
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/auth/google`, {
+      redirect: 'manual',
+      headers: { 'X-Forwarded-Proto': 'https' },
+    });
+
+    const location = res.headers.get('location');
+    const redirectUri = new URL(location).searchParams.get('redirect_uri');
+    assert.match(redirectUri, /^https:\/\//);
+  });
+});
+
 test('GET / shows signed-in state once a token file exists', async () => {
   fs.writeFileSync(
     TOKEN_PATH,
