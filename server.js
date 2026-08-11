@@ -1,7 +1,12 @@
 const express = require('express');
 const auth = require('./lib/auth');
 const sheets = require('./lib/sheets');
-const goalsRepo = require('./lib/goalsRepo');
+// TEMP: building the UI end-to-end against ephemeral in-memory storage
+// before wiring Google Sheets persistence back in. lib/goalsRepo.js (Sheets-
+// backed, same function signatures, already built in Story 2.1) is the
+// drop-in replacement — swap this one require line when re-enabling it.
+const goalsRepo = require('./lib/goalsRepoMemory');
+const { validateGoalInput } = require('./lib/goalValidation');
 const views = require('./lib/views');
 
 const app = express();
@@ -13,12 +18,11 @@ const PORT = process.env.PORT || 3002;
 app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: false }));
 
+// TEMP: sign-in requirement disabled while the UI is built out against
+// ephemeral in-memory storage (see goalsRepo require above) — no real user
+// data is behind this yet, so there's nothing for auth to protect. Re-enable
+// this check when Sheets persistence is wired back in.
 async function requireAuth(req, res, next) {
-  const signedIn = await auth.isSignedIn();
-  if (!signedIn) {
-    res.redirect('/');
-    return;
-  }
   next();
 }
 
@@ -63,6 +67,16 @@ app.get('/goals/new', requireAuth, (req, res) => {
   res.type('html').send(views.newGoalPage());
 });
 
+app.post('/goals', requireAuth, async (req, res) => {
+  const result = validateGoalInput(req.body);
+  if (!result.ok) {
+    res.type('html').send(views.newGoalPage({ error: result.error, values: req.body }));
+    return;
+  }
+  await goalsRepo.createGoal(sheets.loadSheetId(), result.goal);
+  res.redirect('/goals');
+});
+
 app.get('/goals/:id', requireAuth, async (req, res) => {
   const goal = await goalsRepo.getGoal(sheets.loadSheetId(), req.params.id);
   if (!goal) {
@@ -70,6 +84,20 @@ app.get('/goals/:id', requireAuth, async (req, res) => {
     return;
   }
   res.type('html').send(views.goalDetailPage(goal));
+});
+
+app.post('/goals/:id/archive', requireAuth, async (req, res) => {
+  try {
+    await goalsRepo.archiveGoal(sheets.loadSheetId(), req.params.id);
+  } catch (err) {
+    console.error('Archive failed:', err.message);
+  }
+  res.redirect('/goals');
+});
+
+app.post('/goals/:id/delete', requireAuth, async (req, res) => {
+  await goalsRepo.deleteGoal(sheets.loadSheetId(), req.params.id);
+  res.redirect('/goals');
 });
 
 if (require.main === module) {
