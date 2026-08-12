@@ -33,14 +33,13 @@ async function withServer(fn) {
   }
 }
 
-test('GET / shows a Google sign-in link when signed out', async () => {
+// TEMP: "/" is the Home screen and currently bypasses sign-in while the UI
+// is built against ephemeral storage (see server.js) — these assertions
+// reflect that intentionally, not a silent auth regression.
+test('GET / is reachable without signing in (auth temporarily bypassed)', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/`);
-    const body = await res.text();
-
     assert.strictEqual(res.status, 200);
-    assert.match(body, /Sign in with Google/);
-    assert.match(body, /href="\/auth\/google"/);
   });
 });
 
@@ -72,22 +71,15 @@ test('GET /auth/google computes an https redirect_uri when Nginx forwards X-Forw
   });
 });
 
-test('GET / shows signed-in state once a token file exists', async () => {
+test('isSignedIn() falls back to signed-out for an unrefreshable token (auth.js still exercised, just not wired into "/")', async () => {
+  const authLib = require('../lib/auth');
   fs.writeFileSync(
     TOKEN_PATH,
     JSON.stringify({ refresh_token: 'fake-refresh-token', access_token: 'fake-access-token' })
   );
 
-  await withServer(async (base) => {
-    const res = await fetch(`${base}/`);
-    const body = await res.text();
-
-    // The stored fake token can't actually be refreshed against Google, so
-    // isSignedIn() correctly falls back to signed-out rather than trusting
-    // an unverifiable token file.
-    assert.strictEqual(res.status, 200);
-    assert.match(body, /Sign in with Google/);
-  });
+  const signedIn = await authLib.isSignedIn();
+  assert.strictEqual(signedIn, false);
 });
 
 test('POST /auth/signout clears the token file and redirects home', async () => {

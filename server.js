@@ -6,6 +6,7 @@ const sheets = require('./lib/sheets');
 // backed, same function signatures, already built in Story 2.1) is the
 // drop-in replacement — swap this one require line when re-enabling it.
 const goalsRepo = require('./lib/goalsRepoMemory');
+const entriesRepo = require('./lib/entriesRepoMemory');
 const { validateGoalInput } = require('./lib/goalValidation');
 const views = require('./lib/views');
 
@@ -30,9 +31,15 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-app.get('/', async (req, res) => {
-  const signedIn = await auth.isSignedIn();
-  res.type('html').send(signedIn ? views.signedInPage(sheets.loadSheetId()) : views.signedOutPage());
+app.get('/', requireAuth, async (req, res) => {
+  const spreadsheetId = sheets.loadSheetId();
+  const goals = await goalsRepo.listGoals(spreadsheetId);
+  const today = entriesRepo.todayDateString();
+  const entriesByGoal = {};
+  for (const goal of goals) {
+    entriesByGoal[goal.id] = await entriesRepo.listEntriesForGoal(spreadsheetId, goal.id);
+  }
+  res.type('html').send(views.homePage(goals, entriesByGoal, today));
 });
 
 app.get('/auth/google', (req, res) => {
@@ -98,6 +105,25 @@ app.post('/goals/:id/archive', requireAuth, async (req, res) => {
 app.post('/goals/:id/delete', requireAuth, async (req, res) => {
   await goalsRepo.deleteGoal(sheets.loadSheetId(), req.params.id);
   res.redirect('/goals');
+});
+
+app.post('/goals/:id/log', requireAuth, async (req, res) => {
+  const spreadsheetId = sheets.loadSheetId();
+  const goal = await goalsRepo.getGoal(spreadsheetId, req.params.id);
+  if (!goal || goal.archived) {
+    res.redirect('/');
+    return;
+  }
+
+  if (goal.type === 'streak') {
+    await entriesRepo.logEntry(spreadsheetId, { goalId: goal.id, type: 'streak', success: req.body.success === 'true' });
+  } else {
+    const value = Number(req.body.value);
+    if (Number.isFinite(value)) {
+      await entriesRepo.logEntry(spreadsheetId, { goalId: goal.id, type: goal.type, value });
+    }
+  }
+  res.redirect('/');
 });
 
 if (require.main === module) {
